@@ -18,4 +18,17 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <dependencies>
+        <dependency>
+            <groupId>com.bank.onboarding.customerservice</groupId>
+            <artifactId>services</artifactId>
+            <version>${project.parent.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.onboarding.customerservice</groupId>
+            <artifactId>web</artifactId>
+            <version>${project.parent.version}</version>
+        </dependency>
+    </dependencies>
+
 </project>
