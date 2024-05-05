@@ -1,4 +1,4 @@
-package com.bank.onboarding.customerservice;
+package com.bank.onboarding.customerservice.boot;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
