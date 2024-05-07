@@ -1,6 +1,10 @@
 package com.bank.onboarding.customerservice.controllers;
 
+import com.bank.onboarding.commonslib.persistence.models.Address;
+import com.bank.onboarding.commonslib.persistence.models.Contact;
 import com.bank.onboarding.commonslib.persistence.models.Customer;
+import com.bank.onboarding.commonslib.persistence.services.AddressService;
+import com.bank.onboarding.commonslib.persistence.services.ContactService;
 import com.bank.onboarding.commonslib.persistence.services.CustomerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,9 +18,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CustomerController {
     private final CustomerService customerService;
+    private final ContactService contactService;
+    private final AddressService addressService;
 
-    @GetMapping("/test")
-    public List<Customer> index() {
+    @GetMapping("/test/customers")
+    public List<Customer> getCustomers() {
         return customerService.getAllCustomers();
+    }
+
+    @GetMapping("/test/contacts")
+    public List<Contact> getContacts() {
+        return contactService.getAllContacts();
+    }
+
+    @GetMapping("/test/addresses")
+    public List<Address> getAddresses() {
+        return addressService.getAllAddresses();
     }
 }
