@@ -83,8 +83,8 @@ public class CustomerServiceImpl implements CustomerService {
                 .customerNumber(customer.getNumber())
                 .build());
 
-        kafkaProducer.sendEvent("spring.kafka.producer.intervention.topic-name", createAccountEvent);
-        kafkaProducer.sendEvent("spring.kafka.producer.document.topic-name", createAccountEvent);
+        kafkaProducer.sendEvent("${spring.kafka.producer.intervention.topic-name}", createAccountEvent);
+        kafkaProducer.sendEvent("${spring.kafka.producer.document.topic-name}", createAccountEvent);
     }
 
     private void validateCustomer(CreateAccountRequestDTO createAccountRequestDTO) {
