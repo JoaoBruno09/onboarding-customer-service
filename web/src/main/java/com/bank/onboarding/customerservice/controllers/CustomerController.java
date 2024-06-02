@@ -1,6 +1,7 @@
 package com.bank.onboarding.customerservice.controllers;
 
 import com.bank.onboarding.commonslib.persistence.exceptions.OnboardingException;
+import com.bank.onboarding.commonslib.web.dtos.customer.CreateIntervenientDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CustomerDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.UpdateCustomerRequestDTO;
 import com.bank.onboarding.customerservice.services.CustomerService;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,6 +26,17 @@ public class CustomerController {
                                        @RequestBody UpdateCustomerRequestDTO updateCustomerRequestDTO){
         try {
             final CustomerDTO customerDTO = customerService.updateCustomer(customerNumber, updateCustomerRequestDTO);
+            return new ResponseEntity<>(customerDTO, HttpStatus.OK);
+        }
+        catch(OnboardingException e ) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity<?> createCustomerIntervenient(@RequestBody CreateIntervenientDTO createIntervenientDTO){
+        try {
+            final CustomerDTO customerDTO = customerService.createIntervenient(createIntervenientDTO);
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
