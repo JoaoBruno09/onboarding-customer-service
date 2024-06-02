@@ -1,8 +1,10 @@
 package com.bank.onboarding.customerservice.services;
 
-import com.bank.onboarding.commonslib.utils.kafka.CreateAccountEvent;
-import com.bank.onboarding.commonslib.utils.kafka.ErrorEvent;
+import com.bank.onboarding.commonslib.persistence.enums.OperationType;
 import com.bank.onboarding.commonslib.utils.kafka.EventSeDeserializer;
+import com.bank.onboarding.commonslib.utils.kafka.models.CardAndNetbancoEvent;
+import com.bank.onboarding.commonslib.utils.kafka.models.CreateAccountEvent;
+import com.bank.onboarding.commonslib.utils.kafka.models.ErrorEvent;
 import com.bank.onboarding.commonslib.web.dtos.account.AccountRefDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CustomerRefDTO;
 import lombok.RequiredArgsConstructor;
@@ -26,11 +28,18 @@ public class KafkaConsumer {
 
     @KafkaListener(topics = "${spring.kafka.consumer.topic-name}",  groupId = "${spring.kafka.consumer.group-id}")
     public void consumeEvent(ConsumerRecord event){
-        switch (event.key().toString()) {
+        String eventKey = event.key().toString();
+        switch (eventKey) {
             case "CREATE_ACCOUNT" -> {
                 CreateAccountEvent createAccountEvent = (CreateAccountEvent) eventSeDeserializer.deserialize(event.value().toString(), CreateAccountEvent.class);
                 log.info("Event received for account number {}", Optional.ofNullable(createAccountEvent.getAccountRefDTO()).map(AccountRefDTO::getAccountNumber).orElse(""));
                 customerService.createCustomerForCreateAccountOperation(createAccountEvent);
+            }
+            case "CARD_ACCOUNT", "NETBANCO_ACCOUNT" -> {
+                CardAndNetbancoEvent cardAndNetbancoEvent = (CardAndNetbancoEvent) eventSeDeserializer.deserialize(event.value().toString(), CardAndNetbancoEvent.class);
+                log.info("Event received for customer number {}", Optional.ofNullable(cardAndNetbancoEvent.getCustomerRefDTO()).map(CustomerRefDTO::getCustomerNumber).orElse(""));
+                if (OperationType.CARD_ACCOUNT.name().equals(eventKey)) customerService.updateCardCustomer(cardAndNetbancoEvent);
+                if (OperationType.NETBANCO_ACCOUNT.name().equals(eventKey)) customerService.updateNetbancoCustomer(cardAndNetbancoEvent);
             }
             default -> {
                 ErrorEvent errorEvent = (ErrorEvent) eventSeDeserializer.deserialize(event.value().toString(), ErrorEvent.class);

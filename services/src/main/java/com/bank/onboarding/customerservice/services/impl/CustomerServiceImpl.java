@@ -13,8 +13,9 @@ import com.bank.onboarding.commonslib.persistence.services.AddressRepoService;
 import com.bank.onboarding.commonslib.persistence.services.ContactRepoService;
 import com.bank.onboarding.commonslib.persistence.services.CustomerRepoService;
 import com.bank.onboarding.commonslib.utils.OnboardingUtils;
-import com.bank.onboarding.commonslib.utils.kafka.CreateAccountEvent;
-import com.bank.onboarding.commonslib.utils.kafka.ErrorEvent;
+import com.bank.onboarding.commonslib.utils.kafka.models.CardAndNetbancoEvent;
+import com.bank.onboarding.commonslib.utils.kafka.models.CreateAccountEvent;
+import com.bank.onboarding.commonslib.utils.kafka.models.ErrorEvent;
 import com.bank.onboarding.commonslib.utils.kafka.KafkaProducer;
 import com.bank.onboarding.commonslib.utils.mappers.AccountMapper;
 import com.bank.onboarding.commonslib.utils.mappers.CustomerMapper;
@@ -36,7 +37,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -143,6 +143,18 @@ public class CustomerServiceImpl implements CustomerService {
         customerUpdated.setContacts(updateCustomerRequestDTO.getContacts());
 
         return customerUpdated;
+    }
+
+    @Override
+    public void updateCardCustomer(CardAndNetbancoEvent cardAndNetbancoEvent) {
+        //TODO MAKE LOGIC TO UPDATE CUSTOMER CARD VALUE
+
+    }
+
+    @Override
+    public void updateNetbancoCustomer(CardAndNetbancoEvent cardAndNetbancoEvent) {
+        //TODO MAKE LOGIC TO UPDATE CUSTOMER NETBANCO VALUE
+
     }
 
     private Customer buildUpdatedCustomer(Customer customer, UpdateCustomerRequestDTO updateCustomerRequestDTO) {
