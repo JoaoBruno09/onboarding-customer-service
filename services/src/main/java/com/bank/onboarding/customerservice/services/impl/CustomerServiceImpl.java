@@ -2,11 +2,14 @@ package com.bank.onboarding.customerservice.services.impl;
 
 import com.bank.onboarding.commonslib.persistence.enums.OperationType;
 import com.bank.onboarding.commonslib.persistence.exceptions.OnboardingException;
+import com.bank.onboarding.commonslib.persistence.models.Address;
 import com.bank.onboarding.commonslib.persistence.models.Contact;
 import com.bank.onboarding.commonslib.persistence.models.Customer;
 import com.bank.onboarding.commonslib.persistence.models.identifiers.AccountIdentifier;
+import com.bank.onboarding.commonslib.persistence.models.identifiers.AddressIdentifier;
 import com.bank.onboarding.commonslib.persistence.models.identifiers.ContactIdentifier;
 import com.bank.onboarding.commonslib.persistence.services.AccountRefRepoService;
+import com.bank.onboarding.commonslib.persistence.services.AddressRepoService;
 import com.bank.onboarding.commonslib.persistence.services.ContactRepoService;
 import com.bank.onboarding.commonslib.persistence.services.CustomerRepoService;
 import com.bank.onboarding.commonslib.utils.OnboardingUtils;
@@ -14,12 +17,16 @@ import com.bank.onboarding.commonslib.utils.kafka.CreateAccountEvent;
 import com.bank.onboarding.commonslib.utils.kafka.ErrorEvent;
 import com.bank.onboarding.commonslib.utils.kafka.KafkaProducer;
 import com.bank.onboarding.commonslib.utils.mappers.AccountMapper;
+import com.bank.onboarding.commonslib.utils.mappers.CustomerMapper;
 import com.bank.onboarding.commonslib.web.dtos.account.AccountRefDTO;
 import com.bank.onboarding.commonslib.web.dtos.account.CreateAccountRequestDTO;
+import com.bank.onboarding.commonslib.web.dtos.customer.AddressDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.ContactDTO;
+import com.bank.onboarding.commonslib.web.dtos.customer.CustomerDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CustomerRefDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.DocumentIdDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.TaxIdDTO;
+import com.bank.onboarding.commonslib.web.dtos.customer.UpdateCustomerRequestDTO;
 import com.bank.onboarding.customerservice.services.CustomerService;
 import io.micrometer.common.util.StringUtils;
 import lombok.RequiredArgsConstructor;
@@ -28,9 +35,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static com.bank.onboarding.commonslib.persistence.constants.OnboardingConstants.CONTACT_TYPES;
 import static com.bank.onboarding.commonslib.persistence.constants.OnboardingConstants.CUSTOMER_TYPES;
@@ -49,6 +60,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final CustomerRepoService customerRepoService;
     private final ContactRepoService contactRepoService;
     private final AccountRefRepoService accountRefRepoService;
+    private final AddressRepoService addressRepoService;
     private final KafkaProducer kafkaProducer;
     private final OnboardingUtils onboardingUtils;
 
@@ -116,6 +128,91 @@ public class CustomerServiceImpl implements CustomerService {
             customerRepoService.saveCustomerDB(customerToDeleteAccount);
             accountRefRepoService.deleteAccountById(errorEvent.getAccountRefDTO().getAccountId());
         }
+    }
+
+    @Override
+    public CustomerDTO updateCustomer(String customerNumber, UpdateCustomerRequestDTO updateCustomerRequestDTO) {
+        if(Stream.of(updateCustomerRequestDTO).anyMatch(Objects::isNull))
+            throw new OnboardingException("Houve um problema com o seu pedido, por favor verifique as suas informações enviadas!");
+
+        onboardingUtils.isValidPhase(updateCustomerRequestDTO.getAccountPhase(), OperationType.UPDATE_CUSTOMER);
+
+        CustomerDTO customerUpdated = CustomerMapper.INSTANCE.toCustomerDTO(
+                customerRepoService.saveCustomerDB(buildUpdatedCustomer(customerRepoService.getCustomerByNumber(customerNumber), updateCustomerRequestDTO)));
+        customerUpdated.setAddresses(updateCustomerRequestDTO.getAddresses());
+        customerUpdated.setContacts(updateCustomerRequestDTO.getContacts());
+
+        return customerUpdated;
+    }
+
+    private Customer buildUpdatedCustomer(Customer customer, UpdateCustomerRequestDTO updateCustomerRequestDTO) {
+        DocumentIdDTO documentIdDTO = updateCustomerRequestDTO.getDocumentId();
+        TaxIdDTO taxIdDTO = updateCustomerRequestDTO.getTaxId();
+
+        validateDocId(documentIdDTO, null, OperationType.UPDATE_CUSTOMER);
+        validateTaxId(taxIdDTO, null, OperationType.UPDATE_CUSTOMER);
+
+        List<AddressIdentifier> addressIdentifiers = updateCustomerAddresses(updateCustomerRequestDTO.getAddresses());
+        List<ContactIdentifier> contactIdentifiers = updateCustomerContacts(updateCustomerRequestDTO.getContacts());
+
+        customer.setAddresses(addressIdentifiers);
+        customer.setAnnualIncome(updateCustomerRequestDTO.getAnnualIncome());
+        customer.setBirthDate(updateCustomerRequestDTO.getBirthDate());
+        customer.setContacts(contactIdentifiers);
+        customer.setDocumentIdCountry(documentIdDTO.getDocumentIdCountry());
+        customer.setDocumentIdNumber(documentIdDTO.getDocumentIdNumber());
+        customer.setDocumentIdType(documentIdDTO.getDocumentIdType());
+        customer.setDocumentIdExpirationDate(documentIdDTO.getDocumentIdExpirationDate());
+        customer.setEducationLevel(updateCustomerRequestDTO.getEducationLevel());
+        customer.setFatherName(updateCustomerRequestDTO.getFatherName());
+        customer.setFirstName(updateCustomerRequestDTO.getFirstName());
+        customer.setGender(updateCustomerRequestDTO.getGender());
+        customer.setLastName(updateCustomerRequestDTO.getLastName());
+        customer.setMotherName(updateCustomerRequestDTO.getMotherName());
+        customer.setNationality(updateCustomerRequestDTO.getNationality());
+        customer.setProfession(updateCustomerRequestDTO.getProfession());
+        customer.setTaxIdCountry(taxIdDTO.getTaxIdCountry());
+        customer.setTaxIdNumber(taxIdDTO.getTaxIdNumber());
+        customer.setTaxIdType(taxIdDTO.getTaxIdType());
+
+        return customer;
+    }
+
+    private List<ContactIdentifier> updateCustomerContacts(List<ContactDTO> contacts) {
+        List<ContactIdentifier> contactIdentifiers = new ArrayList<>();
+
+        if(!contacts.isEmpty()){
+            contacts.forEach(contactDTO -> {
+                validateContact(contactDTO, null, OperationType.UPDATE_CUSTOMER);
+                Contact contact = contactRepoService.saveContactDB(Contact.builder()
+                        .type(contactDTO.getType())
+                        .value(contactDTO.getValue())
+                        .creationTime(LocalDateTime.now())
+                        .lastUpdateTime(LocalDateTime.now())
+                        .build());
+                contactIdentifiers.add(ContactIdentifier.builder().contactId(contact.getId()).build());
+            });
+        }
+
+        return contactIdentifiers;
+    }
+
+    private List<AddressIdentifier> updateCustomerAddresses(List<AddressDTO> addresses) {
+        List<AddressIdentifier> addressIdentifiers = new ArrayList<>();
+
+        if(!addresses.isEmpty()){
+            addresses.forEach(addressDTO -> {
+                Address address = addressRepoService.saveAddressDB(Address.builder()
+                        .city(addressDTO.getCity())
+                        .country(addressDTO.getCountry())
+                        .street(addressDTO.getStreet())
+                        .zip(addressDTO.getZip())
+                        .build());
+                addressIdentifiers.add(AddressIdentifier.builder().addressId(address.getId()).build());
+            });
+        }
+
+        return addressIdentifiers;
     }
 
     private void validateCustomer(CreateAccountRequestDTO createAccountRequestDTO, AccountRefDTO accountRefDTO, OperationType operationType) {

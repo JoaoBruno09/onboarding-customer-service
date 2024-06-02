@@ -1,38 +1,33 @@
 package com.bank.onboarding.customerservice.controllers;
 
-import com.bank.onboarding.commonslib.persistence.models.Address;
-import com.bank.onboarding.commonslib.persistence.models.Contact;
-import com.bank.onboarding.commonslib.persistence.models.Customer;
-import com.bank.onboarding.commonslib.persistence.services.AddressRepoService;
-import com.bank.onboarding.commonslib.persistence.services.ContactRepoService;
-import com.bank.onboarding.commonslib.persistence.services.CustomerRepoService;
+import com.bank.onboarding.commonslib.persistence.exceptions.OnboardingException;
+import com.bank.onboarding.commonslib.web.dtos.customer.CustomerDTO;
+import com.bank.onboarding.commonslib.web.dtos.customer.UpdateCustomerRequestDTO;
+import com.bank.onboarding.customerservice.services.CustomerService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("customer")
 @RequiredArgsConstructor
 public class CustomerController {
-    private final CustomerRepoService customerRepoService;
-    private final ContactRepoService contactRepoService;
-    private final AddressRepoService addressRepoService;
+    private final CustomerService customerService;
 
-    @GetMapping("/test/customers")
-    public List<Customer> getCustomers() {
-        return customerRepoService.getAllCustomers();
-    }
-
-    @GetMapping("/test/contacts")
-    public List<Contact> getContacts() {
-        return contactRepoService.getAllContacts();
-    }
-
-    @GetMapping("/test/addresses")
-    public List<Address> getAddresses() {
-        return addressRepoService.getAllAddresses();
+    @PutMapping("/{customerNumber}")
+    public ResponseEntity<?> updateCustomer(@PathVariable("customerNumber") String customerNumber,
+                                       @RequestBody UpdateCustomerRequestDTO updateCustomerRequestDTO){
+        try {
+            final CustomerDTO customerDTO = customerService.updateCustomer(customerNumber, updateCustomerRequestDTO);
+            return new ResponseEntity<>(customerDTO, HttpStatus.OK);
+        }
+        catch(OnboardingException e ) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
     }
 }
