@@ -172,15 +172,28 @@ public class CustomerServiceImpl implements CustomerService {
     public CustomerDTO createIntervenient(CreateIntervenientDTO createIntervenientDTO) {
         onboardingUtils.isValidPhase(createIntervenientDTO.getAccountPhase(), ADD_INTERVENIENT);
 
-        IntervenientRequestDTO intervenientRequestDTO = createIntervenientDTO.getIntervenientRequestDTO();
-        validateCustomer(intervenientRequestDTO, null, ADD_INTERVENIENT);
-
         AccountRef accountRef = accountRefRepoService.findAccountRefByAccountNumber(createIntervenientDTO.getAccountNumber());
         String accountId = accountRef.getId();
         if(accountId == null) throw new OnboardingException("A conta para a qual quer inserir este cliente não existe!");
 
-        Customer customer = createNewCustomer(intervenientRequestDTO, accountId);
-        CustomerRefDTO customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
+        IntervenientRequestDTO intervenientRequestDTO = createIntervenientDTO.getIntervenient();
+        String customerNumber = createIntervenientDTO.getCustomerNumber();
+        Customer customer;
+        CustomerRefDTO customerRefDTO;
+        if(intervenientRequestDTO != null) {
+            validateCustomer(intervenientRequestDTO, null, ADD_INTERVENIENT);
+            customer = createNewCustomer(intervenientRequestDTO, accountId);
+            customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
+        }else if(customerNumber != null){
+            customer = customerRepoService.getCustomerByNumber(customerNumber);
+
+            if(customer.getAccounts().stream().anyMatch(accountIdentifier -> accountIdentifier.getAccountId().equals(accountId)))
+                throw new OnboardingException("Não é possível adicionar uma nova interveção ao cliente porque o cliente não é válido para a conta!");
+
+            customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
+        }else{
+            throw new OnboardingException("Não é possível criar um novo interveniente ou adicionar uma nova interveção a um cliente já existente!");
+        }
 
         kafkaProducer.sendEvent(interventionTopicName, ADD_INTERVENIENT, CreateIntervenientEvent.builder()
                 .createIntervenientDTO(createIntervenientDTO)
