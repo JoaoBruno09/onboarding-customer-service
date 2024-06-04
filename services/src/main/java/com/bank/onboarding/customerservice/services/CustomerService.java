@@ -4,6 +4,7 @@ import com.bank.onboarding.commonslib.utils.kafka.models.CardAndNetbancoEvent;
 import com.bank.onboarding.commonslib.utils.kafka.models.CreateAccountEvent;
 import com.bank.onboarding.commonslib.utils.kafka.models.ErrorEvent;
 import com.bank.onboarding.commonslib.web.dtos.customer.CreateIntervenientDTO;
+import com.bank.onboarding.commonslib.web.dtos.customer.CreateRelationDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CustomerDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.UpdateCustomerRequestDTO;
 
@@ -13,5 +14,6 @@ public interface CustomerService {
  CustomerDTO updateCustomer(String customerNumber, UpdateCustomerRequestDTO updateCustomerRequestDTO);
  void updateCardCustomer(CardAndNetbancoEvent cardAndNetbancoEvent);
  void updateNetbancoCustomer(CardAndNetbancoEvent cardAndNetbancoEvent);
- CustomerDTO createIntervenient(CreateIntervenientDTO createIntervenientDTO);
+ CustomerDTO createIntervenientOrAddIntervention(CreateIntervenientDTO createIntervenientDTO);
+ CustomerDTO createRelationOrAddRelation(CreateRelationDTO createRelationDTO);
 }

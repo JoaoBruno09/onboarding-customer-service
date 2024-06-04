@@ -2,6 +2,7 @@ package com.bank.onboarding.customerservice.controllers;
 
 import com.bank.onboarding.commonslib.persistence.exceptions.OnboardingException;
 import com.bank.onboarding.commonslib.web.dtos.customer.CreateIntervenientDTO;
+import com.bank.onboarding.commonslib.web.dtos.customer.CreateRelationDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CustomerDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.UpdateCustomerRequestDTO;
 import com.bank.onboarding.customerservice.services.CustomerService;
@@ -36,7 +37,18 @@ public class CustomerController {
     @PostMapping
     public ResponseEntity<?> createCustomerIntervenient(@RequestBody CreateIntervenientDTO createIntervenientDTO){
         try {
-            final CustomerDTO customerDTO = customerService.createIntervenient(createIntervenientDTO);
+            final CustomerDTO customerDTO = customerService.createIntervenientOrAddIntervention(createIntervenientDTO);
+            return new ResponseEntity<>(customerDTO, HttpStatus.OK);
+        }
+        catch(OnboardingException e ) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity<?> createCustomerRelation(@RequestBody CreateRelationDTO createRelationDTO){
+        try {
+            final CustomerDTO customerDTO = customerService.createRelationOrAddRelation(createRelationDTO);
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
