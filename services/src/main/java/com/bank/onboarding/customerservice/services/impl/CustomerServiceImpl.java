@@ -87,7 +87,7 @@ public class CustomerServiceImpl implements CustomerService {
     public void createCustomerForCreateAccountOperation(CreateAccountEvent createAccountEvent) {
         CustomerRequestDTO customerRequestDTO = createAccountEvent.getCreateAccountRequestDTO().getCustomerIntervenient();
         validateCustomer(customerRequestDTO,createAccountEvent.getAccountRefDTO(), CREATE_ACCOUNT);
-        Customer customer = createNewCustomer(customerRequestDTO, createAccountEvent.getAccountRefDTO().getAccountId());
+        Customer customer = createNewCustomer(customerRequestDTO, createAccountEvent.getAccountRefDTO().getAccountId(), CREATE_ACCOUNT);
 
         accountRefRepoService.saveAccountRefDB(AccountMapper.INSTANCE.toAccountRef(createAccountEvent.getAccountRefDTO()));
         CustomerRefDTO customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
@@ -99,7 +99,7 @@ public class CustomerServiceImpl implements CustomerService {
         kafkaProducer.sendEvent(relationTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
     }
 
-    private Customer createNewCustomer(CustomerRequestDTO customerRequestDTO, String accountId) {
+    private Customer createNewCustomer(CustomerRequestDTO customerRequestDTO, String accountId, OperationType operationType) {
         Contact contact = contactRepoService.saveContactDB(Contact.builder()
                 .type(customerRequestDTO.getCustomerContact().getType())
                 .value(customerRequestDTO.getCustomerContact().getValue())
@@ -107,7 +107,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .lastUpdateTime(LocalDateTime.now())
                 .build());
 
-       return customerRepoService.saveCustomerDB(Customer.builder()
+        Customer customer = Customer.builder()
                 .accounts(List.of(AccountIdentifier.builder().accountId(accountId).build()))
                 .birthDate(customerRequestDTO.getCustomerBirthDate())
                 .contacts(List.of(ContactIdentifier.builder().contactId(contact.getId()).build()))
@@ -117,7 +117,6 @@ public class CustomerServiceImpl implements CustomerService {
                 .documentIdType(customerRequestDTO.getCustomerDocId().getDocumentIdType())
                 .documentIdExpirationDate(customerRequestDTO.getCustomerDocId().getDocumentIdExpirationDate())
                 .firstName(customerRequestDTO.getCustomerFirstName())
-                .intervenientIndicator(Boolean.TRUE)
                 .lastName(customerRequestDTO.getCustomerLastName())
                 .lastUpdateTime(LocalDateTime.now())
                 .nationality("Português")
@@ -126,19 +125,37 @@ public class CustomerServiceImpl implements CustomerService {
                 .taxIdNumber(customerRequestDTO.getCustomerTaxId().getTaxIdNumber())
                 .taxIdType(customerRequestDTO.getCustomerTaxId().getTaxIdType())
                 .type(customerRequestDTO.getCustomerType())
-                .build());
+                .build();
+
+        if(List.of(CREATE_ACCOUNT, ADD_INTERVENIENT).contains(operationType)) customer.setIntervenientIndicator(true);
+        if(ADD_REL.equals(operationType)) customer.setRelationIndicator(true);
+
+       return customerRepoService.saveCustomerDB(customer);
     }
 
     @Override
     public void handleErrorEvent(ErrorEvent errorEvent) {
-        if(CREATE_ACCOUNT.equals(errorEvent.getOperationType())){
+        OperationType operationType = errorEvent.getOperationType();
+        if(CREATE_ACCOUNT.equals(operationType)){
             Customer customerToDeleteAccount = customerRepoService.getCustomerById(errorEvent.getCustomerRefDTO().getCustomerId());
             String accountId = errorEvent.getAccountRefDTO().getAccountId();
             customerToDeleteAccount.setAccounts(customerToDeleteAccount.getAccounts().stream().filter(accountIdentifier -> !accountId.equals(accountIdentifier.getAccountId())).toList());
             customerRepoService.saveCustomerDB(customerToDeleteAccount);
             accountRefRepoService.deleteAccountById(errorEvent.getAccountRefDTO().getAccountId());
-        } else if (ADD_INTERVENIENT.equals(errorEvent.getOperationType())){
-            customerRepoService.deleteCustomerById(errorEvent.getCustomerRefDTO().getCustomerId());
+        } else if (ADD_INTERVENIENT.equals(operationType) || ADD_REL.equals(operationType)){
+            String customerId = errorEvent.getCustomerRefDTO().getCustomerId();
+            if(Boolean.TRUE.equals(errorEvent.getIsNewCustomer())){
+                customerRepoService.deleteCustomerById(customerId);
+            }else{
+                Customer customerToUpdateIndicator = customerRepoService.getCustomerById(customerId);
+                if (ADD_INTERVENIENT.equals(operationType)) {
+                    customerToUpdateIndicator.setIntervenientIndicator(false);
+                    customerRepoService.saveCustomerDB(customerToUpdateIndicator);
+                } else {
+                    customerToUpdateIndicator.setRelationIndicator(false);
+                    customerRepoService.saveCustomerDB(customerToUpdateIndicator);
+                }
+            }
         }
     }
 
@@ -172,19 +189,19 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    public CustomerDTO createIntervenientOrAddIntervention(CreateIntervenientDTO createIntervenientDTO) {
+    public CustomerDTO createIntervenientOrAddIntervention(String customerNumber, CreateIntervenientDTO createIntervenientDTO) {
         onboardingUtils.isValidPhase(createIntervenientDTO.getAccountPhase(), ADD_INTERVENIENT);
 
         AccountRef accountRef = onboardingUtils.verifyIfAccountExists(createIntervenientDTO.getAccountNumber());
 
         Customer customer = createCustomerOrAddRelationOrAddInterventionToExistingOne(createIntervenientDTO, createIntervenientDTO.getIntervenient(),
-                createIntervenientDTO.getCustomerNumber(), ADD_INTERVENIENT, accountRef);
+                customerNumber, ADD_INTERVENIENT, accountRef);
 
         return CustomerMapper.INSTANCE.toCustomerDTO(customer);
     }
 
     @Override
-    public CustomerDTO createRelationOrAddRelation(CreateRelationDTO createRelationDTO) {
+    public CustomerDTO createRelationOrAddRelation(String parentCustomerNumber, CreateRelationDTO createRelationDTO) {
         onboardingUtils.isValidPhase(createRelationDTO.getAccountPhase(), ADD_REL);
 
         AccountRef accountRef = onboardingUtils.verifyIfAccountExists(createRelationDTO.getAccountNumber());
@@ -194,33 +211,41 @@ public class CustomerServiceImpl implements CustomerService {
             throw new OnboardingException("Não é possível inserir uma relação para com o cliente " + childNumber);
 
         Customer customer = createCustomerOrAddRelationOrAddInterventionToExistingOne(createRelationDTO, createRelationDTO.getParentCustomer(),
-                createRelationDTO.getParentCustomerNumber(), ADD_REL, accountRef);
+                parentCustomerNumber, ADD_REL, accountRef);
 
         return CustomerMapper.INSTANCE.toCustomerDTO(customer);
     }
 
-    private Customer createCustomerOrAddRelationOrAddInterventionToExistingOne(Object request, CustomerRequestDTO parentCustomer, String parentCustomerNumber, OperationType operationType, AccountRef accountRef) {
+    private Customer createCustomerOrAddRelationOrAddInterventionToExistingOne(Object request, CustomerRequestDTO customerRequest, String parentCustomerNumber, OperationType operationType, AccountRef accountRef) {
         String accountId = accountRef.getId();
         Customer customer;
         CustomerRefDTO customerRefDTO;
+        boolean newCustomer;
 
-        if(parentCustomer != null) {
-            validateCustomer(parentCustomer, null, operationType);
+        if(customerRequest != null) {
+            validateCustomer(customerRequest, null, operationType);
 
-            customer = createNewCustomer(parentCustomer, accountId);
+            customer = createNewCustomer(customerRequest, accountId, operationType);
             customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
+            newCustomer = true;
 
             kafkaProducer.sendEvent(documentTopicName, UPDATE_CUSTOMER_REF, customerRefDTO);
             kafkaProducer.sendEvent(accountTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
             if(ADD_INTERVENIENT.equals(operationType)) kafkaProducer.sendEvent(relationTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
         }else if(parentCustomerNumber != null){
             customer = customerRepoService.getCustomerByNumber(parentCustomerNumber);
+            newCustomer = false;
 
-            if(customer.getAccounts().stream().anyMatch(accountIdentifier -> accountIdentifier.getAccountId().equals(accountId)))
+            if(ADD_INTERVENIENT.equals(operationType) && Boolean.FALSE.equals(Optional.ofNullable(customer.getIntervenientIndicator()).orElse(false)))
+                customer.setIntervenientIndicator(true);
+
+            if(ADD_REL.equals(operationType) && Boolean.FALSE.equals(Optional.ofNullable(customer.getRelationIndicator()).orElse(false)))
+                customer.setRelationIndicator(true);
+
+            if(customer.getAccounts().stream().noneMatch(accountIdentifier -> accountIdentifier.getAccountId().equals(accountId)))
                 throw new OnboardingException("O cliente não é válido para a conta!");
 
             customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
-
         }else{
             String message = ADD_INTERVENIENT.equals(operationType)
                     ? "Não é possível criar o novo cliente ou adicionar a nova interveção. Necessita de introduzir um novo cliente ou o número de um cliente já existente!"
@@ -232,13 +257,14 @@ public class CustomerServiceImpl implements CustomerService {
         if(ADD_INTERVENIENT.equals(operationType)){
             kafkaProducer.sendEvent(interventionTopicName, operationType, CreateIntervenientEvent.builder()
                     .createIntervenientDTO((CreateIntervenientDTO) request)
+                    .newCustomer(newCustomer)
                     .accountRefDTO(AccountMapper.INSTANCE.toAccountRefDTO(accountRef))
                     .customerRefDTO(customerRefDTO)
                     .build());
-
         } else{
             kafkaProducer.sendEvent(relationTopicName, operationType, CreateRelationEvent.builder()
                     .createRelationDTO((CreateRelationDTO) request)
+                    .newCustomer(newCustomer)
                     .accountRefDTO(AccountMapper.INSTANCE.toAccountRefDTO(accountRef))
                     .customerRefDTO(customerRefDTO)
                     .build());
@@ -326,10 +352,13 @@ public class CustomerServiceImpl implements CustomerService {
                     StringUtils.isBlank(customerRequestDTO.getCustomerFirstName()) ||
                     StringUtils.isBlank(customerRequestDTO.getCustomerLastName())){
 
-                onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+                if(CREATE_ACCOUNT.equals(operationType)) onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
                 throw new OnboardingException("Houve um problema com o seu pedido, por favor verifique as suas informações enviadas!");
             } else if (!CUSTOMER_TYPES.contains(Optional.ofNullable(customerRequestDTO.getCustomerType()).orElse(""))) {
-                onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
+                if(CREATE_ACCOUNT.equals(operationType))  onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
                 throw new OnboardingException("O tipo de cliente inserido não existe, tente novamente!");
             }
         }
@@ -342,7 +371,9 @@ public class CustomerServiceImpl implements CustomerService {
         if (accountRefDTO != null && (!CONTACT_TYPES.contains(customerContactType) || (TELEPHONE.name().equals(customerContactType) &&
                     !Pattern.compile("^(\\d{3}[ ]?){2}\\d{3}$").matcher(customerContactValue).matches()) ||
                     (EMAIL.name().equals(customerContactType) && !Pattern.compile("^(.+)@(\\S+) $").matcher(customerContactValue).matches()))){
-                onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
+                if(CREATE_ACCOUNT.equals(operationType))  onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
                 throw new OnboardingException("O tipo de contacto inserido não é válido!");
             }
 
@@ -355,7 +386,9 @@ public class CustomerServiceImpl implements CustomerService {
         if (accountRefDTO != null && (!DOCUMENT_TYPES_CREATE_ACCOUNT_REQUEST.contains(Optional.ofNullable(customerDocId).map(DocumentIdDTO::getDocumentIdType).orElse("")) ||
                     !Pattern.compile("^\\d{8} \\d [A-Z]{2}\\d$").matcher(customerDocIdNumber).matches() ||
                     Boolean.FALSE.equals(customerDocIdExpirationdate.toLocalDate().isAfter(actualTime.toLocalDate())))){
-                onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
+                if(CREATE_ACCOUNT.equals(operationType)) onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
                 throw new OnboardingException("Ocorreu um erro. Verifique os campos do documento de identificação!");
             }
 
@@ -365,7 +398,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         if (accountRefDTO != null && (!DOCUMENT_TYPES_CREATE_ACCOUNT_REQUEST.contains(Optional.ofNullable(customerTaxId).map(TaxIdDTO::getTaxIdType).orElse("")) ||
                     !Pattern.compile("^\\d{9}$").matcher(customerDocIdNumber).matches())){
-                onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
+                if(CREATE_ACCOUNT.equals(operationType)) onboardingUtils.sendErrorEvent(accountTopicName, accountRefDTO, null, operationType);
+
                 throw new OnboardingException("O tipo de documento inserido não é valido!");
             }
 

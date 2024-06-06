@@ -14,6 +14,6 @@ public interface CustomerService {
  CustomerDTO updateCustomer(String customerNumber, UpdateCustomerRequestDTO updateCustomerRequestDTO);
  void updateCardCustomer(CardAndNetbancoEvent cardAndNetbancoEvent);
  void updateNetbancoCustomer(CardAndNetbancoEvent cardAndNetbancoEvent);
- CustomerDTO createIntervenientOrAddIntervention(CreateIntervenientDTO createIntervenientDTO);
- CustomerDTO createRelationOrAddRelation(CreateRelationDTO createRelationDTO);
+ CustomerDTO createIntervenientOrAddIntervention(String customerNumber, CreateIntervenientDTO createIntervenientDTO);
+ CustomerDTO createRelationOrAddRelation(String parentCustomerNumber, CreateRelationDTO createRelationDTO);
 }

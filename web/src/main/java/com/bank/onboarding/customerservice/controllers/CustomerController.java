@@ -10,10 +10,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -34,10 +34,11 @@ public class CustomerController {
         }
     }
 
-    @PostMapping
-    public ResponseEntity<?> createCustomerIntervenient(@RequestBody CreateIntervenientDTO createIntervenientDTO){
+    @PutMapping("/intervention")
+    public ResponseEntity<?> createCustomerIntervenient(@RequestParam(name = "customerNumber", required = false) String customerNumber,
+                                                        @RequestBody CreateIntervenientDTO createIntervenientDTO){
         try {
-            final CustomerDTO customerDTO = customerService.createIntervenientOrAddIntervention(createIntervenientDTO);
+            final CustomerDTO customerDTO = customerService.createIntervenientOrAddIntervention(customerNumber, createIntervenientDTO);
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
@@ -45,10 +46,11 @@ public class CustomerController {
         }
     }
 
-    @PostMapping
-    public ResponseEntity<?> createCustomerRelation(@RequestBody CreateRelationDTO createRelationDTO){
+    @PutMapping("/relation")
+    public ResponseEntity<?> createCustomerRelation(@RequestParam(name = "customerNumber", required = false) String parentCustomerNumber,
+                                                    @RequestBody CreateRelationDTO createRelationDTO){
         try {
-            final CustomerDTO customerDTO = customerService.createRelationOrAddRelation(createRelationDTO);
+            final CustomerDTO customerDTO = customerService.createRelationOrAddRelation(parentCustomerNumber, createRelationDTO);
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
