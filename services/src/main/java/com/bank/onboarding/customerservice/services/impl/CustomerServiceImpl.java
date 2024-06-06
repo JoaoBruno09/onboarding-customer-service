@@ -57,6 +57,8 @@ import static com.bank.onboarding.commonslib.persistence.enums.ContactType.TELEP
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.ADD_INTERVENIENT;
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.ADD_REL;
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.CREATE_ACCOUNT;
+import static com.bank.onboarding.commonslib.persistence.enums.OperationType.DELETE_INTERVENIENT;
+import static com.bank.onboarding.commonslib.persistence.enums.OperationType.DELETE_REL;
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.UPDATE_CUSTOMER_REF;
 
 @Slf4j
@@ -99,40 +101,6 @@ public class CustomerServiceImpl implements CustomerService {
         kafkaProducer.sendEvent(relationTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
     }
 
-    private Customer createNewCustomer(CustomerRequestDTO customerRequestDTO, String accountId, OperationType operationType) {
-        Contact contact = contactRepoService.saveContactDB(Contact.builder()
-                .type(customerRequestDTO.getCustomerContact().getType())
-                .value(customerRequestDTO.getCustomerContact().getValue())
-                .creationTime(LocalDateTime.now())
-                .lastUpdateTime(LocalDateTime.now())
-                .build());
-
-        Customer customer = Customer.builder()
-                .accounts(List.of(AccountIdentifier.builder().accountId(accountId).build()))
-                .birthDate(customerRequestDTO.getCustomerBirthDate())
-                .contacts(List.of(ContactIdentifier.builder().contactId(contact.getId()).build()))
-                .creationTime(LocalDateTime.now())
-                .documentIdCountry(customerRequestDTO.getCustomerDocId().getDocumentIdCountry())
-                .documentIdNumber(customerRequestDTO.getCustomerDocId().getDocumentIdNumber())
-                .documentIdType(customerRequestDTO.getCustomerDocId().getDocumentIdType())
-                .documentIdExpirationDate(customerRequestDTO.getCustomerDocId().getDocumentIdExpirationDate())
-                .firstName(customerRequestDTO.getCustomerFirstName())
-                .lastName(customerRequestDTO.getCustomerLastName())
-                .lastUpdateTime(LocalDateTime.now())
-                .nationality("Português")
-                .number("C" + ((int) faker.number().randomNumber(9, true)))
-                .taxIdCountry(customerRequestDTO.getCustomerTaxId().getTaxIdCountry())
-                .taxIdNumber(customerRequestDTO.getCustomerTaxId().getTaxIdNumber())
-                .taxIdType(customerRequestDTO.getCustomerTaxId().getTaxIdType())
-                .type(customerRequestDTO.getCustomerType())
-                .build();
-
-        if(List.of(CREATE_ACCOUNT, ADD_INTERVENIENT).contains(operationType)) customer.setIntervenientIndicator(true);
-        if(ADD_REL.equals(operationType)) customer.setRelationIndicator(true);
-
-       return customerRepoService.saveCustomerDB(customer);
-    }
-
     @Override
     public void handleErrorEvent(ErrorEvent errorEvent) {
         OperationType operationType = errorEvent.getOperationType();
@@ -142,19 +110,19 @@ public class CustomerServiceImpl implements CustomerService {
             customerToDeleteAccount.setAccounts(customerToDeleteAccount.getAccounts().stream().filter(accountIdentifier -> !accountId.equals(accountIdentifier.getAccountId())).toList());
             customerRepoService.saveCustomerDB(customerToDeleteAccount);
             accountRefRepoService.deleteAccountById(errorEvent.getAccountRefDTO().getAccountId());
-        } else if (ADD_INTERVENIENT.equals(operationType) || ADD_REL.equals(operationType)){
+        } else if (ADD_INTERVENIENT.equals(operationType) || DELETE_INTERVENIENT.equals(operationType) || ADD_REL.equals(operationType) || DELETE_REL.equals(operationType)){
             String customerId = errorEvent.getCustomerRefDTO().getCustomerId();
             if(Boolean.TRUE.equals(errorEvent.getIsNewCustomer())){
                 customerRepoService.deleteCustomerById(customerId);
             }else{
                 Customer customerToUpdateIndicator = customerRepoService.getCustomerById(customerId);
-                if (ADD_INTERVENIENT.equals(operationType)) {
+                if (ADD_INTERVENIENT.equals(operationType) || DELETE_INTERVENIENT.equals(operationType)) {
                     customerToUpdateIndicator.setIntervenientIndicator(false);
-                    customerRepoService.saveCustomerDB(customerToUpdateIndicator);
-                } else {
+                } else{
                     customerToUpdateIndicator.setRelationIndicator(false);
-                    customerRepoService.saveCustomerDB(customerToUpdateIndicator);
                 }
+
+                customerRepoService.saveCustomerDB(customerToUpdateIndicator);
             }
         }
     }
@@ -215,6 +183,42 @@ public class CustomerServiceImpl implements CustomerService {
 
         return CustomerMapper.INSTANCE.toCustomerDTO(customer);
     }
+
+    private Customer createNewCustomer(CustomerRequestDTO customerRequestDTO, String accountId, OperationType operationType) {
+        Contact contact = contactRepoService.saveContactDB(Contact.builder()
+                .type(customerRequestDTO.getCustomerContact().getType())
+                .value(customerRequestDTO.getCustomerContact().getValue())
+                .creationTime(LocalDateTime.now())
+                .lastUpdateTime(LocalDateTime.now())
+                .build());
+
+        Customer customer = Customer.builder()
+                .accounts(List.of(AccountIdentifier.builder().accountId(accountId).build()))
+                .birthDate(customerRequestDTO.getCustomerBirthDate())
+                .contacts(List.of(ContactIdentifier.builder().contactId(contact.getId()).build()))
+                .creationTime(LocalDateTime.now())
+                .documentIdCountry(customerRequestDTO.getCustomerDocId().getDocumentIdCountry())
+                .documentIdNumber(customerRequestDTO.getCustomerDocId().getDocumentIdNumber())
+                .documentIdType(customerRequestDTO.getCustomerDocId().getDocumentIdType())
+                .documentIdExpirationDate(customerRequestDTO.getCustomerDocId().getDocumentIdExpirationDate())
+                .firstName(customerRequestDTO.getCustomerFirstName())
+                .lastName(customerRequestDTO.getCustomerLastName())
+                .lastUpdateTime(LocalDateTime.now())
+                .nationality("Português")
+                .number("C" + ((int) faker.number().randomNumber(9, true)))
+                .taxIdCountry(customerRequestDTO.getCustomerTaxId().getTaxIdCountry())
+                .taxIdNumber(customerRequestDTO.getCustomerTaxId().getTaxIdNumber())
+                .taxIdType(customerRequestDTO.getCustomerTaxId().getTaxIdType())
+                .type(customerRequestDTO.getCustomerType())
+                .build();
+
+        if(List.of(CREATE_ACCOUNT, ADD_INTERVENIENT).contains(operationType)) customer.setIntervenientIndicator(true);
+        if(ADD_REL.equals(operationType)) customer.setRelationIndicator(true);
+
+       return customerRepoService.saveCustomerDB(customer);
+    }
+
+
 
     private Customer createCustomerOrAddRelationOrAddInterventionToExistingOne(Object request, CustomerRequestDTO customerRequest, String parentCustomerNumber, OperationType operationType, AccountRef accountRef) {
         String accountId = accountRef.getId();
@@ -378,6 +382,7 @@ public class CustomerServiceImpl implements CustomerService {
             }
 
     }
+
     private void validateDocId(DocumentIdDTO customerDocId, AccountRefDTO accountRefDTO, OperationType operationType) {
         String customerDocIdNumber = Optional.ofNullable(customerDocId).map(DocumentIdDTO::getDocumentIdNumber).orElse("").trim();
         LocalDateTime actualTime = LocalDateTime.now();
@@ -393,6 +398,7 @@ public class CustomerServiceImpl implements CustomerService {
             }
 
     }
+
     private void validateTaxId(TaxIdDTO customerTaxId, AccountRefDTO accountRefDTO, OperationType operationType) {
         String customerDocIdNumber = Optional.ofNullable(customerTaxId).map(TaxIdDTO::getTaxIdNumber).orElse("").trim();
 
