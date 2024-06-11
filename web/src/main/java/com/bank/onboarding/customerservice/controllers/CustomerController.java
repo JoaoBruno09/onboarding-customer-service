@@ -1,11 +1,13 @@
 package com.bank.onboarding.customerservice.controllers;
 
 import com.bank.onboarding.commonslib.persistence.exceptions.OnboardingException;
+import com.bank.onboarding.commonslib.utils.OnboardingUtils;
 import com.bank.onboarding.commonslib.web.dtos.customer.CreateIntervenientDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CreateRelationDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CustomerDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.UpdateCustomerRequestDTO;
 import com.bank.onboarding.customerservice.services.CustomerService;
+import feign.Request;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CustomerController {
     private final CustomerService customerService;
+    private final OnboardingUtils onboardingUtils;
 
     @PutMapping("/{customerNumber}")
     public ResponseEntity<?> updateCustomer(@PathVariable("customerNumber") String customerNumber,
@@ -31,7 +34,7 @@ public class CustomerController {
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            return onboardingUtils.buildResponseEntity(Request.HttpMethod.PUT.name(), e.getMessage());
         }
     }
 
@@ -43,7 +46,7 @@ public class CustomerController {
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            return onboardingUtils.buildResponseEntity(Request.HttpMethod.PUT.name(), e.getMessage());
         }
     }
 
@@ -55,7 +58,7 @@ public class CustomerController {
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            return onboardingUtils.buildResponseEntity(Request.HttpMethod.PUT.name(), e.getMessage());
         }
     }
 }
