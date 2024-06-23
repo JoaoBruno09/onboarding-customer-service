@@ -20,6 +20,7 @@ import com.bank.onboarding.commonslib.utils.kafka.models.CreateAccountEvent;
 import com.bank.onboarding.commonslib.utils.kafka.models.CreateIntervenientEvent;
 import com.bank.onboarding.commonslib.utils.kafka.models.CreateRelationEvent;
 import com.bank.onboarding.commonslib.utils.kafka.models.ErrorEvent;
+import com.bank.onboarding.commonslib.utils.kafka.models.ValidationEvent;
 import com.bank.onboarding.commonslib.utils.mappers.AccountMapper;
 import com.bank.onboarding.commonslib.utils.mappers.CustomerMapper;
 import com.bank.onboarding.commonslib.web.dtos.account.AccountRefDTO;
@@ -39,6 +40,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.validation.BeanPropertyBindingResult;
+import org.springframework.validation.ValidationUtils;
+import org.springframework.validation.Validator;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -59,7 +63,9 @@ import static com.bank.onboarding.commonslib.persistence.enums.OperationType.ADD
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.CREATE_ACCOUNT;
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.DELETE_INTERVENIENT;
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.DELETE_REL;
+import static com.bank.onboarding.commonslib.persistence.enums.OperationType.UPDATE_CUSTOMER;
 import static com.bank.onboarding.commonslib.persistence.enums.OperationType.UPDATE_CUSTOMER_REF;
+import static com.bank.onboarding.commonslib.persistence.enums.ValidationType.VALID_CUSTOMERS;
 
 @Slf4j
 @Service
@@ -72,6 +78,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final AddressRepoService addressRepoService;
     private final KafkaProducer kafkaProducer;
     private final OnboardingUtils onboardingUtils;
+    private final Validator validator;
 
     @Value("${spring.kafka.producer.intervention.topic-name}")
     private String interventionTopicName;
@@ -132,14 +139,37 @@ public class CustomerServiceImpl implements CustomerService {
         if(Stream.of(updateCustomerRequestDTO).anyMatch(Objects::isNull))
             throw new OnboardingException("Houve um problema com o seu pedido, por favor verifique as suas informações enviadas!");
 
+        Customer existingCustomer = customerRepoService.getCustomerByNumber(customerNumber);
+        String accountId = accountRefRepoService.findAccountRefByAccountNumber(updateCustomerRequestDTO.getAccountNumber()).getId();
+
+        if(existingCustomer.getAccounts().stream().noneMatch(accountIdentifier -> accountId.equals(accountIdentifier.getAccountId())))
+            throw new OnboardingException("O cliente que está a tentar atualizar não pertence à conta introduzida");
+
         onboardingUtils.isValidPhase(updateCustomerRequestDTO.getAccountPhase(), OperationType.UPDATE_CUSTOMER);
 
-        CustomerDTO customerUpdated = CustomerMapper.INSTANCE.toCustomerDTO(
-                customerRepoService.saveCustomerDB(buildUpdatedCustomer(customerRepoService.getCustomerByNumber(customerNumber), updateCustomerRequestDTO)));
+        buildUpdatedCustomer(existingCustomer, updateCustomerRequestDTO);
+
+        CustomerDTO customerUpdated = CustomerMapper.INSTANCE.toCustomerDTO(existingCustomer);
         customerUpdated.setAddresses(updateCustomerRequestDTO.getAddresses());
         customerUpdated.setContacts(updateCustomerRequestDTO.getContacts());
 
+        BeanPropertyBindingResult bindingCustomerValidations = new BeanPropertyBindingResult(customerUpdated, "customerDTO");
+        ValidationUtils.invokeValidator(validator, customerUpdated, bindingCustomerValidations);
+
+        if (!bindingCustomerValidations.hasErrors())
+            existingCustomer.setIsValid(true);
+
+        customerUpdated = CustomerMapper.INSTANCE.toCustomerDTO(customerRepoService.saveCustomerDB(existingCustomer));
+
+        if(areAllAccountCustomersValid(accountId))
+            kafkaProducer.sendEvent(accountTopicName, UPDATE_CUSTOMER, ValidationEvent.builder().validationType(VALID_CUSTOMERS).accountId(accountId).build());
+
         return customerUpdated;
+    }
+
+    private boolean areAllAccountCustomersValid(String accountId) {
+        List <Customer> customerList = customerRepoService.getCustomersByAccountId(accountId);
+        return !customerList.isEmpty() && customerList.stream().allMatch(customer -> Boolean.TRUE.equals(customer.getIsValid()));
     }
 
     @Override
@@ -277,7 +307,7 @@ public class CustomerServiceImpl implements CustomerService {
         return customer;
     }
 
-    private Customer buildUpdatedCustomer(Customer customer, UpdateCustomerRequestDTO updateCustomerRequestDTO) {
+    private void buildUpdatedCustomer(Customer customer, UpdateCustomerRequestDTO updateCustomerRequestDTO) {
         DocumentIdDTO documentIdDTO = updateCustomerRequestDTO.getDocumentId();
         TaxIdDTO taxIdDTO = updateCustomerRequestDTO.getTaxId();
 
@@ -306,8 +336,6 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setTaxIdCountry(taxIdDTO.getTaxIdCountry());
         customer.setTaxIdNumber(taxIdDTO.getTaxIdNumber());
         customer.setTaxIdType(taxIdDTO.getTaxIdType());
-
-        return customer;
     }
 
     private List<ContactIdentifier> updateCustomerContacts(List<ContactDTO> contacts) {
