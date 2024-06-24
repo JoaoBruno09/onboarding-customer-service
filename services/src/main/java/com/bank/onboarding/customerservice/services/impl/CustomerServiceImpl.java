@@ -13,6 +13,7 @@ import com.bank.onboarding.commonslib.persistence.services.AccountRefRepoService
 import com.bank.onboarding.commonslib.persistence.services.AddressRepoService;
 import com.bank.onboarding.commonslib.persistence.services.ContactRepoService;
 import com.bank.onboarding.commonslib.persistence.services.CustomerRepoService;
+import com.bank.onboarding.commonslib.utils.AsyncExecutor;
 import com.bank.onboarding.commonslib.utils.OnboardingUtils;
 import com.bank.onboarding.commonslib.utils.kafka.KafkaProducer;
 import com.bank.onboarding.commonslib.utils.kafka.models.CardAndNetbancoEvent;
@@ -49,6 +50,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -79,6 +81,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final KafkaProducer kafkaProducer;
     private final OnboardingUtils onboardingUtils;
     private final Validator validator;
+    private final AsyncExecutor asyncExecutor;
 
     @Value("${spring.kafka.producer.intervention.topic-name}")
     private String interventionTopicName;
@@ -102,10 +105,13 @@ public class CustomerServiceImpl implements CustomerService {
         CustomerRefDTO customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
         createAccountEvent.setCustomerRefDTO(customerRefDTO);
 
-        kafkaProducer.sendEvent(interventionTopicName, CREATE_ACCOUNT, createAccountEvent);
-        kafkaProducer.sendEvent(documentTopicName, CREATE_ACCOUNT, createAccountEvent);
-        kafkaProducer.sendEvent(accountTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
-        kafkaProducer.sendEvent(relationTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
+        List<CompletableFuture<?>> completableFutureList = new ArrayList<>();
+        completableFutureList.add(CompletableFuture.runAsync(() -> kafkaProducer.sendEvent(interventionTopicName, CREATE_ACCOUNT, createAccountEvent)));
+        completableFutureList.add(CompletableFuture.runAsync(() ->  kafkaProducer.sendEvent(documentTopicName, CREATE_ACCOUNT, createAccountEvent)));
+        completableFutureList.add(CompletableFuture.runAsync(() -> kafkaProducer.sendEvent(accountTopicName, UPDATE_CUSTOMER_REF , customerRefDTO)));
+        completableFutureList.add(CompletableFuture.runAsync(() -> kafkaProducer.sendEvent(relationTopicName, UPDATE_CUSTOMER_REF , customerRefDTO)));
+
+        asyncExecutor.execute(completableFutureList);
     }
 
     @Override
@@ -263,9 +269,14 @@ public class CustomerServiceImpl implements CustomerService {
             customerRefDTO = CustomerRefDTO.builder().customerId(customer.getId()).customerNumber(customer.getNumber()).build();
             newCustomer = true;
 
-            kafkaProducer.sendEvent(documentTopicName, UPDATE_CUSTOMER_REF, customerRefDTO);
-            kafkaProducer.sendEvent(accountTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
-            if(ADD_INTERVENIENT.equals(operationType)) kafkaProducer.sendEvent(relationTopicName, UPDATE_CUSTOMER_REF , customerRefDTO);
+            List<CompletableFuture<?>> completableFutureList = new ArrayList<>();
+            completableFutureList.add(CompletableFuture.runAsync(() -> kafkaProducer.sendEvent(documentTopicName, UPDATE_CUSTOMER_REF, customerRefDTO)));
+            completableFutureList.add(CompletableFuture.runAsync(() ->  kafkaProducer.sendEvent(accountTopicName, UPDATE_CUSTOMER_REF , customerRefDTO)));
+
+            if(ADD_INTERVENIENT.equals(operationType))
+                completableFutureList.add(CompletableFuture.runAsync(() -> kafkaProducer.sendEvent(relationTopicName, UPDATE_CUSTOMER_REF , customerRefDTO)));
+
+            asyncExecutor.execute(completableFutureList);
         }else if(parentCustomerNumber != null){
             customer = customerRepoService.getCustomerByNumber(parentCustomerNumber);
             newCustomer = false;
