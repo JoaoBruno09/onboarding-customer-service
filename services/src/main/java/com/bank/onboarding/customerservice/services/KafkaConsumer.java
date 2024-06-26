@@ -4,6 +4,7 @@ import com.bank.onboarding.commonslib.persistence.enums.OperationType;
 import com.bank.onboarding.commonslib.utils.kafka.EventSeDeserializer;
 import com.bank.onboarding.commonslib.utils.kafka.models.CardAndNetbancoEvent;
 import com.bank.onboarding.commonslib.utils.kafka.models.CreateAccountEvent;
+import com.bank.onboarding.commonslib.utils.kafka.models.DocUploadEvent;
 import com.bank.onboarding.commonslib.utils.kafka.models.ErrorEvent;
 import com.bank.onboarding.commonslib.web.dtos.account.AccountRefDTO;
 import com.bank.onboarding.commonslib.web.dtos.customer.CustomerRefDTO;
@@ -38,9 +39,14 @@ public class KafkaConsumer {
             }
             case "CARD_ACCOUNT", "NETBANCO_ACCOUNT" -> {
                 CardAndNetbancoEvent cardAndNetbancoEvent = (CardAndNetbancoEvent) eventSeDeserializer.deserialize(eventValue, CardAndNetbancoEvent.class);
-                log.info("Event received for customer number {}", Optional.ofNullable(cardAndNetbancoEvent.getCustomerRefDTO()).map(CustomerRefDTO::getCustomerNumber).orElse(""));
+                log.info("Event received for customer number {}", Optional.ofNullable(cardAndNetbancoEvent.getCustomerNumber()).orElse(""));
                 if (OperationType.CARD_ACCOUNT.name().equals(eventKey)) customerService.updateCardCustomer(cardAndNetbancoEvent);
                 if (OperationType.NETBANCO_ACCOUNT.name().equals(eventKey)) customerService.updateNetbancoCustomer(cardAndNetbancoEvent);
+            }
+            case "DOCS_UPLOAD" -> {
+                DocUploadEvent docUploadEvent = (DocUploadEvent) eventSeDeserializer.deserialize(eventValue, DocUploadEvent.class);
+                log.info("Event received to validate customer docs with number {}", docUploadEvent.getAccountNumber());
+                customerService.updateDocsValidOrNotValid(docUploadEvent);
             }
             default -> {
                 ErrorEvent errorEvent = (ErrorEvent) eventSeDeserializer.deserialize(eventValue, ErrorEvent.class);
