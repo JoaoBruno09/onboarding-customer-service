@@ -222,6 +222,11 @@ public class CustomerServiceImpl implements CustomerService {
                 .lastUpdateTime(LocalDateTime.now())
                 .build());
 
+        String customerNumber;
+        do {
+            customerNumber = "C" + ((int) faker.number().randomNumber(9, true));
+        }while (!customerRepoService.getCustomersByNumber(customerNumber).isEmpty());
+
         Customer customer = Customer.builder()
                 .accounts(List.of(AccountIdentifier.builder().accountNumber(accountNumber).build()))
                 .birthDate(customerRequestDTO.getCustomerBirthDate())
@@ -235,7 +240,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .lastName(customerRequestDTO.getCustomerLastName())
                 .lastUpdateTime(LocalDateTime.now())
                 .nationality("Português")
-                .number("C" + ((int) faker.number().randomNumber(9, true)))
+                .number(customerNumber)
                 .taxIdCountry(customerRequestDTO.getCustomerTaxId().getTaxIdCountry())
                 .taxIdNumber(customerRequestDTO.getCustomerTaxId().getTaxIdNumber())
                 .taxIdType(customerRequestDTO.getCustomerTaxId().getTaxIdType())
