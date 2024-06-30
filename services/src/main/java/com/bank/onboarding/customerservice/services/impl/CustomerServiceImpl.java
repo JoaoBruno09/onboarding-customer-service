@@ -237,6 +237,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .documentIdType(customerRequestDTO.getCustomerDocId().getDocumentIdType())
                 .documentIdExpirationDate(customerRequestDTO.getCustomerDocId().getDocumentIdExpirationDate())
                 .firstName(customerRequestDTO.getCustomerFirstName())
+                .isValid(false)
                 .lastName(customerRequestDTO.getCustomerLastName())
                 .lastUpdateTime(LocalDateTime.now())
                 .nationality("Português")
