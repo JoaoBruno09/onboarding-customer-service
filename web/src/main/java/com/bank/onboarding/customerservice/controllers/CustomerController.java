@@ -11,6 +11,7 @@ import feign.Request;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -26,11 +27,11 @@ public class CustomerController {
     private final CustomerService customerService;
     private final OnboardingUtils onboardingUtils;
 
-    @PutMapping("/{customerNumber}")
+    @PutMapping(value = "/{customerNumber}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> updateCustomer(@PathVariable("customerNumber") String customerNumber,
                                             @RequestBody @Valid UpdateCustomerRequestDTO updateCustomerRequestDTO){
         try {
-            final CustomerDTO customerDTO = customerService.updateCustomer(customerNumber, updateCustomerRequestDTO);
+            CustomerDTO customerDTO = customerService.updateCustomer(customerNumber, updateCustomerRequestDTO);
             return new ResponseEntity<>(customerDTO, HttpStatus.OK);
         }
         catch(OnboardingException e ) {
@@ -38,7 +39,7 @@ public class CustomerController {
         }
     }
 
-    @PutMapping("/intervention")
+    @PutMapping(value = "/intervention", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> createCustomerIntervenient(@RequestParam(name = "customerNumber", required = false) String customerNumber,
                                                         @RequestBody @Valid CreateIntervenientDTO createIntervenientDTO){
         try {
@@ -50,7 +51,7 @@ public class CustomerController {
         }
     }
 
-    @PutMapping("/relation")
+    @PutMapping(value = "/relation", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> createCustomerRelation(@RequestParam(name = "customerNumber", required = false) String parentCustomerNumber,
                                                     @RequestBody @Valid CreateRelationDTO createRelationDTO){
         try {
