@@ -96,7 +96,7 @@ class CustomerControllerUnitTests {
         UpdateCustomerRequestDTO updateCustomerRequestDTO = buildUpdateCustomerRequestDTO();
 
         when(customerService.updateCustomer("C123456789", updateCustomerRequestDTO)).thenReturn(customerDTO);
-        mockMvc.perform(put("/customer/C123456789")
+        mockMvc.perform(put("/customers/C123456789")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Onboarding-Client-Id", clientId)
                         .param("customerNumber", "C123456789")
@@ -116,7 +116,7 @@ class CustomerControllerUnitTests {
         CreateIntervenientDTO createIntervenientDTO = buildCreateIntervenientDTO();
 
         when(customerService.createIntervenientOrAddIntervention("C123456789", createIntervenientDTO)).thenReturn(customerDTO);
-        mockMvc.perform(put("/customer/intervention")
+        mockMvc.perform(put("/customers/intervention")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Onboarding-Client-Id", clientId)
                         .param("customerNumber", "C123456789")
@@ -136,7 +136,7 @@ class CustomerControllerUnitTests {
         CreateRelationDTO createRelationDTO = buildCreateRelationDTO();
 
         when(customerService.createRelationOrAddRelation("C123456789", createRelationDTO)).thenReturn(customerDTO);
-        mockMvc.perform(put("/customer/relation")
+        mockMvc.perform(put("/customers/relation")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Onboarding-Client-Id", clientId)
                         .param("customerNumber", "C123456789")
