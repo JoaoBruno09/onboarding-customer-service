@@ -161,7 +161,7 @@ public class CustomerServiceImpl implements CustomerService {
         if (!bindingCustomerValidations.hasErrors()){
             existingCustomer.setIsValid(true);
             kafkaProducer.sendEvent(accountTopicName, UPDATE_CUSTOMER_REF, CustomerRefDTO.builder()
-                    .customerNumber(customerNumber).isValid(existingCustomer.getIsValid()).accounts(existingCustomer.getAccounts()));
+                    .customerNumber(customerNumber).isValid(existingCustomer.getIsValid()).accounts(existingCustomer.getAccounts()).build());
         }
 
         return CustomerMapper.INSTANCE.toCustomerDTO(customerRepoService.saveCustomerDB(existingCustomer));
@@ -237,6 +237,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .documentIdType(customerRequestDTO.getCustomerDocId().getDocumentIdType())
                 .documentIdExpirationDate(customerRequestDTO.getCustomerDocId().getDocumentIdExpirationDate())
                 .firstName(customerRequestDTO.getCustomerFirstName())
+                .intervenientIndicator(List.of(CREATE_ACCOUNT, ADD_INTERVENIENT).contains(operationType) ? Boolean.TRUE : null)
                 .isValid(false)
                 .lastName(customerRequestDTO.getCustomerLastName())
                 .lastUpdateTime(LocalDateTime.now())
@@ -246,10 +247,8 @@ public class CustomerServiceImpl implements CustomerService {
                 .taxIdNumber(customerRequestDTO.getCustomerTaxId().getTaxIdNumber())
                 .taxIdType(customerRequestDTO.getCustomerTaxId().getTaxIdType())
                 .type(customerRequestDTO.getCustomerType())
+                .relationIndicator(ADD_REL.equals(operationType) ? Boolean.TRUE : null)
                 .build();
-
-        if(List.of(CREATE_ACCOUNT, ADD_INTERVENIENT).contains(operationType)) customer.setIntervenientIndicator(true);
-        if(ADD_REL.equals(operationType)) customer.setRelationIndicator(true);
 
        return customerRepoService.saveCustomerDB(customer);
     }
