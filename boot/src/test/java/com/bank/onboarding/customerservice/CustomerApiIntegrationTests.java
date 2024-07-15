@@ -95,7 +95,7 @@ class CustomerApiIntegrationTests {
     }
 
     @Test
-    void createCustomerIntervenient() throws JsonProcessingException{
+    void createCustomerIntervenientTest() throws JsonProcessingException{
         HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(buildCreateIntervenientDTO()), httpHeaders);
         ResponseEntity<?> response = restTemplate.exchange(
                 createURLWithPort() + "intervention", HttpMethod.PUT, entity, CustomerDTO.class, "C123456789");
@@ -109,7 +109,7 @@ class CustomerApiIntegrationTests {
     }
 
     @Test
-    void createCustomerRelation() throws JsonProcessingException{
+    void createCustomerRelationTest() throws JsonProcessingException{
         HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(buildCreateRelationDTO()), httpHeaders);
         ResponseEntity<?> response = restTemplate.exchange(
                 createURLWithPort() + "relation", HttpMethod.PUT, entity, CustomerDTO.class, "C123456789");
